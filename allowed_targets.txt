@@ -1,0 +1,12 @@
+# This file lists targets that this ethical port scanner is explicitly allowed to scan.
+# This is a security feature to prevent accidental or unauthorized scanning.
+#
+# Each line should contain a single domain name or public IP address.
+# Comments can be added using the '#' symbol.
+#
+# Examples of legally scannable targets:
+#
+# - scanme.nmap.org
+#
+# Note: By adding a target here, you confirm that you have permission to scan it.
+# Do not add any target you do not own or have written permission to test.
