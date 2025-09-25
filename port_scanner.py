@@ -155,7 +155,6 @@ def main():
         print(f"Port range too large. Limiting to {max_range_span} ports from the start.")
         end_port = start_port + max_range_span
 
-    # Concurrency: lower by default for phones
     max_workers = 30
     print(f"Scanning ports {start_port} to {end_port} on {target_ip} using up to {max_workers} threads...\n")
 
