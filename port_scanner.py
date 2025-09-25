@@ -1,11 +1,9 @@
+# port_scanner_safe.py
 """
-port_scanner_safe.py
 Ethical-by-default port scanner:
 - Only scans loopback (localhost) and private IP ranges by default.
-- To scan any public IP or domain, you must add that target explicitly
-  to allowed_targets.txt in the repo (this prevents accidental/malicious use).
-- Keeps defaults conservative: limited concurrency and short range by default.
-- Prints a clear ethical warning and refuses otherwise.
+- Requires explicit consent.txt file to operate.
+- Supports a one-click "dry-run" mode for safe demonstrations.
 """
 
 import socket
@@ -13,8 +11,20 @@ import time
 import ipaddress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
+import sys
+import logging
 
-ALLOWED_FILE = "allowed_targets.txt"  # list of extra targets the repo owner added
+ALLOWED_FILE = "allowed_targets.txt"
+CONSENT_FILE = "consent.txt"
+LOG_FILE = "scan_log.log"
+
+# Set up logging to a file
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 # ---------- Utility checks ----------
 def is_private_or_loopback(ip_str):
@@ -24,6 +34,16 @@ def is_private_or_loopback(ip_str):
         return ip.is_private or ip.is_loopback
     except Exception:
         return False
+
+def check_consent():
+    """Check for explicit consent from the user."""
+    if not os.path.exists(CONSENT_FILE):
+        return False
+    with open(CONSENT_FILE, "r", encoding="utf-8") as f:
+        content = f.read().strip().lower()
+        if "i consent to use this tool on my own network" in content:
+            return True
+    return False
 
 def read_allowed_targets():
     """Read allowed targets from ALLOWED_FILE. Each line may be domain or IP."""
@@ -57,9 +77,21 @@ def scan_port(target_ip, port, timeout=0.6):
 # ---------- Main program ----------
 def main():
     print("⚠️  Ethical scanner — only scan devices you own or have permission to test.")
-    print("By default this tool will only scan localhost or private network IPs.")
-    print("To scan any other public domain/IP, add it to 'allowed_targets.txt' in this repo.\n")
+    
+    # Check for consent file
+    if not check_consent():
+        print("\n🔒 Scan blocked: No consent found.")
+        print("To proceed, you must create a file named 'consent.txt' in this directory")
+        print("with the exact phrase 'I consent to use this tool on my own network'.")
+        return
 
+    is_dry_run = "--dry-run" in sys.argv
+    if is_dry_run:
+        print("✅ Dry-run mode enabled. No ports will be scanned.")
+    else:
+        print("By default this tool will only scan localhost or private network IPs.")
+        print("To scan any other public domain/IP, add it to 'allowed_targets.txt'.\n")
+        
     target = input("Enter host to scan (domain or IP, e.g. example.com or 127.0.0.1): ").strip()
     if not target:
         print("No target provided. Exiting.")
@@ -88,17 +120,15 @@ def main():
     if not allowed:
         print("\n🔒 Scan blocked: target is NOT in the safe list.")
         print("If you own this target and want to scan it, add the domain or IP to the")
-        print("file 'allowed_targets.txt' in this repository (one entry per line).")
-        print("Example content for allowed_targets.txt:")
-        print("  # explicit allow list for this scanner")
-        print("  myserver.example.com")
-        print("  203.0.113.42\n")
+        print("file 'allowed_targets.txt' in this repository.")
         print("After adding the target to allowed_targets.txt, re-run this script.")
+        logging.info(f"BLOCKED: Attempt to scan unapproved target '{target}' ({target_ip})")
         return
 
-    # Defaults & safe limits
     print(f"Resolved {target} -> {target_ip}")
-    print("NOTE: Because this tool is ethical-by-default, defaults are conservative.")
+    logging.info(f"SCAN START: Target '{target}' ({target_ip})")
+
+    # Defaults & safe limits
     try:
         start_port = int(input("Start port (default 1): ") or "1")
         end_port   = int(input("End port (default 1024): ") or "1024")
@@ -113,20 +143,32 @@ def main():
         print("End port < start port. Using defaults 1-1024.")
         start_port, end_port = 1, 1024
 
-    # Safety caps:
-    max_range_span = 5000   # don't let user try to scan tens of thousands by accident
+    # Safety caps
+    max_range_span = 5000
     if (end_port - start_port) > max_range_span:
         print(f"Port range too large. Limiting to {max_range_span} ports from the start.")
         end_port = start_port + max_range_span
 
-    # Concurrency: lower by default for phones
+    # Concurrency
     max_workers = 30
     print(f"Scanning ports {start_port} to {end_port} on {target_ip} using up to {max_workers} threads...\n")
 
+    # --- Dry-run check ---
+    if is_dry_run:
+        print("\n--- Dry-Run Complete ---")
+        print(f"The following scan would be performed:")
+        print(f"Target: {target_ip}")
+        print(f"Port Range: {start_port} to {end_port}")
+        print(f"Concurrency: {max_workers} threads")
+        print("No network connections were made.")
+        logging.info(f"DRY-RUN: Target '{target_ip}', Ports {start_port}-{end_port}")
+        return
+
+    # --- Actual Scan ---
     start_time = time.time()
     open_ports = []
-
     ports = range(start_port, end_port + 1)
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(scan_port, target_ip, p): p for p in ports}
         for future in as_completed(futures):
@@ -139,8 +181,11 @@ def main():
     print("\nScan finished.")
     if open_ports:
         print("Open ports:", sorted(open_ports))
+        logging.info(f"SCAN COMPLETE: Found open ports: {sorted(open_ports)}")
     else:
         print("No open ports found in the scanned range.")
+        logging.info("SCAN COMPLETE: No open ports found.")
+        
     print(f"Time taken: {duration:.2f} seconds")
 
 if __name__ == "__main__":
