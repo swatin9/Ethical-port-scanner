@@ -54,11 +54,47 @@ def scan_port(target_ip, port, timeout=0.6):
         return None
     return None
 
+# ---------- Demo scan ----------
+def demo_scan():
+    print("\n🎬 Running demo scan on localhost (127.0.0.1)...")
+    target_ip = "127.0.0.1"
+    start_port, end_port = 20, 1024  # safe demo range
+    open_ports = []
+
+    print(f"Scanning ports {start_port}-{end_port} on {target_ip}...\n")
+    start_time = time.time()
+
+    ports = range(start_port, end_port + 1)
+    for port in ports:
+        if scan_port(target_ip, port):
+            print(f"\033[92m[OPEN]   Port {port}\033[0m")  # green for open
+            open_ports.append(port)
+        else:
+            print(f"\033[90m[CLOSED] Port {port}\033[0m", end="\r")  # gray for closed (overwrite line)
+
+    duration = time.time() - start_time
+    print("\n\nDemo scan finished.")
+    if open_ports:
+        print("Open ports found:", open_ports)
+    else:
+        print("No open ports found.")
+    print(f"Time taken: {duration:.2f} seconds\n")
+
 # ---------- Main program ----------
 def main():
     print("⚠️  Ethical scanner — only scan devices you own or have permission to test.")
     print("By default this tool will only scan localhost or private network IPs.")
     print("To scan any other public domain/IP, add it to 'allowed_targets.txt' in this repo.\n")
+
+    # Mode choice
+    print("Choose mode:")
+    print("[1] Manual scan (your own IP or allowed targets)")
+    print("[2] Demo scan (safe localhost scan to see output)")
+
+    mode = input("Enter 1 or 2: ").strip()
+    if mode == "2":
+        demo_scan()
+        return
 
     target = input("Enter host to scan (domain or IP, e.g. example.com or 127.0.0.1): ").strip()
     if not target:
@@ -132,7 +168,7 @@ def main():
         for future in as_completed(futures):
             port_found = future.result()
             if port_found:
-                print(f"[OPEN]  Port {port_found}")
+                print(f"\033[92m[OPEN]  Port {port_found}\033[0m")  # green for open
                 open_ports.append(port_found)
 
     duration = time.time() - start_time
